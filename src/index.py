@@ -53,7 +53,10 @@ async def health(response: Response) -> dict:
 @app.post("/api/telegram")
 async def telegram_webhook(
     request: Request,
-    x_telegram_bot_api_secret_token: str | None = Header(default=None),
+    x_telegram_bot_api_secret_token: str | None = Header(
+        default=None,
+        alias="X-Telegram-Bot-Api-Secret-Token",
+    ),
 ) -> dict:
     logger.info("incoming update path=%s", request.url.path)
     try:
