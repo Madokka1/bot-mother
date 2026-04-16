@@ -39,6 +39,10 @@ def _get_secret_from_headers(request: Request) -> str | None:
         or None
     )
 
+def _get_secret_from_query(request: Request) -> str | None:
+    qp = request.query_params
+    return qp.get("token") or qp.get("secret") or None
+
 
 async def _handle_webhook(
     request: Request,
@@ -54,12 +58,18 @@ async def _handle_webhook(
 
     expected = settings.telegram_secret_token
     if expected:
-        received = header_secret or _get_secret_from_headers(request)
-        if received != expected and path_secret != expected:
+        received_header = header_secret or _get_secret_from_headers(request)
+        received_query = _get_secret_from_query(request)
+        if (
+            received_header != expected
+            and received_query != expected
+            and path_secret != expected
+        ):
             logger.warning(
-                "invalid secret token expected_fp=%s received_fp=%s path_fp=%s",
+                "invalid secret token expected_fp=%s header_fp=%s query_fp=%s path_fp=%s",
                 _token_fingerprint(expected),
-                _token_fingerprint(received),
+                _token_fingerprint(received_header),
+                _token_fingerprint(received_query),
                 _token_fingerprint(path_secret),
             )
             raise HTTPException(status_code=401, detail="Invalid secret token")
