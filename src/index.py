@@ -80,7 +80,11 @@ async def _handle_webhook(
     header_secret: str | None,
     path_secret: str | None,
 ) -> dict:
-    logger.info("incoming update")
+    logger.info(
+        "incoming update path=%s query_keys=%s",
+        request.url.path,
+        list(request.query_params.keys()),
+    )
     try:
         settings, bot, dp, generator = _get_runtime()
     except Exception as e:
@@ -99,7 +103,7 @@ async def _handle_webhook(
     )
     if not ok:
         logger.warning("invalid secret token %s", diagnostics)
-        raise HTTPException(status_code=401, detail="Invalid secret token")
+        raise HTTPException(status_code=401, detail={"error": "Invalid secret token", **diagnostics})
 
     payload = await request.json()
     update = Update.model_validate(payload)
@@ -173,4 +177,9 @@ async def telegram_auth_check(
         query_secret=received_query,
         path_secret=None,
     )
-    return {"ok": ok, **diagnostics}
+    return {
+        "ok": ok,
+        "path": request.url.path,
+        "query_keys": list(request.query_params.keys()),
+        **diagnostics,
+    }
