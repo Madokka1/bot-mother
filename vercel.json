@@ -1,8 +1,18 @@
 {
-  "functions": {
-    "api/telegram.py": {
-      "maxDuration": 300
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/telegram.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxDuration": 300
+      }
     }
-  }
+  ],
+  "routes": [
+    {
+      "src": "/api/telegram/?",
+      "dest": "api/telegram.py"
+    }
+  ]
 }
-
