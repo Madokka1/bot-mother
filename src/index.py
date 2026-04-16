@@ -32,6 +32,44 @@ def _token_fingerprint(value: str | None) -> str | None:
     return digest[:10]
 
 
+def _get_secret_from_headers(request: Request) -> str | None:
+    return (
+        request.headers.get("x-telegram-bot-api-secret-token")
+        or request.headers.get("X-Telegram-Bot-Api-Secret-Token")
+        or None
+    )
+
+
+async def _handle_webhook(
+    request: Request,
+    header_secret: str | None,
+    path_secret: str | None,
+) -> dict:
+    logger.info("incoming update")
+    try:
+        settings, bot, dp, generator = _get_runtime()
+    except Exception as e:
+        logger.exception("runtime init failed")
+        raise HTTPException(status_code=500, detail=f"Init failed: {type(e).__name__}: {e}") from e
+
+    expected = settings.telegram_secret_token
+    if expected:
+        received = header_secret or _get_secret_from_headers(request)
+        if received != expected and path_secret != expected:
+            logger.warning(
+                "invalid secret token expected_fp=%s received_fp=%s path_fp=%s",
+                _token_fingerprint(expected),
+                _token_fingerprint(received),
+                _token_fingerprint(path_secret),
+            )
+            raise HTTPException(status_code=401, detail="Invalid secret token")
+
+    payload = await request.json()
+    update = Update.model_validate(payload)
+    await dp.feed_update(bot, update, settings=settings, generator=generator)
+    return {"ok": True}
+
+
 @app.get("/")
 @app.get("/api/telegram")
 async def health(response: Response) -> dict:
@@ -49,7 +87,22 @@ async def health(response: Response) -> dict:
         return {"ok": False, "error": type(e).__name__, "detail": str(e)}
 
 
-@app.post("/")
+@app.post("/api/telegram/{path_secret}")
+async def telegram_webhook_with_path(
+    path_secret: str,
+    request: Request,
+    x_telegram_bot_api_secret_token: str | None = Header(
+        default=None,
+        alias="X-Telegram-Bot-Api-Secret-Token",
+    ),
+) -> dict:
+    return await _handle_webhook(
+        request=request,
+        header_secret=x_telegram_bot_api_secret_token,
+        path_secret=path_secret,
+    )
+
+
 @app.post("/api/telegram")
 async def telegram_webhook(
     request: Request,
@@ -58,23 +111,8 @@ async def telegram_webhook(
         alias="X-Telegram-Bot-Api-Secret-Token",
     ),
 ) -> dict:
-    logger.info("incoming update path=%s", request.url.path)
-    try:
-        settings, bot, dp, generator = _get_runtime()
-    except Exception as e:
-        logger.exception("runtime init failed")
-        raise HTTPException(status_code=500, detail=f"Init failed: {type(e).__name__}: {e}") from e
-
-    expected = settings.telegram_secret_token
-    if expected and x_telegram_bot_api_secret_token != expected:
-        logger.warning(
-            "invalid secret token expected_fp=%s received_fp=%s",
-            _token_fingerprint(expected),
-            _token_fingerprint(x_telegram_bot_api_secret_token),
-        )
-        raise HTTPException(status_code=401, detail="Invalid secret token")
-
-    payload = await request.json()
-    update = Update.model_validate(payload)
-    await dp.feed_update(bot, update, settings=settings, generator=generator)
-    return {"ok": True}
+    return await _handle_webhook(
+        request=request,
+        header_secret=x_telegram_bot_api_secret_token,
+        path_secret=None,
+    )
