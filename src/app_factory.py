@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from aiogram import Bot, Dispatcher
+from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 
 from src.config import Settings
@@ -9,7 +10,10 @@ from src.handlers import router
 
 
 def create_bot_app(settings: Settings) -> tuple[Bot, Dispatcher, HFSpaceGenerator]:
-    bot = Bot(token=settings.bot_token, parse_mode=ParseMode.HTML)
+    bot = Bot(
+        token=settings.bot_token,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+    )
 
     generator = HFSpaceGenerator(
         space_id=settings.hf_space_id,
@@ -22,4 +26,3 @@ def create_bot_app(settings: Settings) -> tuple[Bot, Dispatcher, HFSpaceGenerato
     dp = Dispatcher()
     dp.include_router(router)
     return bot, dp, generator
-
